@@ -1,0 +1,17 @@
+.build/
+.swiftpm/
+.DS_Store
+.idea/
+.vscode/
+dist/
+Artifacts/
+*.dmg
+*.zip
+*.app/
+*.pcap
+*.pcapng
+*.env
+.env*
+Backups/
+CH9121-*.json
+CH9121-diagnostics*.txt
