@@ -1,0 +1,91 @@
+name: Build macOS app
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test and package Universal macOS app
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          uname -m
+      - name: Protocol and loopback UDP tests
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p dist
+          swift test 2>&1 | tee dist/tests.log
+      - name: Build ARM64 and Intel, sign, smoke-test and package
+        shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+          if [[ "$REF_TYPE" == tag && "$REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            export VERSION="${BASH_REMATCH[1]}"
+          fi
+          bash scripts/build-macos.sh
+      - name: Upload distributables
+        uses: actions/upload-artifact@v4
+        with:
+          name: CH9121-Config-macOS-universal
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            dist/CH9121-Config-macOS-universal.zip
+            dist/CH9121-Config-macOS-universal.dmg
+            dist/SHA256SUMS.txt
+            dist/CH9121-Config-preview.png
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          if-no-files-found: ignore
+          retention-days: 14
+          path: dist/tests.log
+  release:
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: CH9121-Config-macOS-universal
+          path: release
+      - name: Publish tagged build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'macOS 13+ · Apple Silicon + Intel' \
+            'Ad-hoc signed; not Apple-notarized. Hardware compatibility requires real-device validation.' > notes.txt
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+          else
+            gh release create "$TAG" release/* --verify-tag --title "CH9121 Config $TAG" --notes-file notes.txt
+          fi
