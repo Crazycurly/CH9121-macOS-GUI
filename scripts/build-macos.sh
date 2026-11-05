@@ -24,7 +24,9 @@ for ARCH in arm64 x86_64; do
 done
 xcrun lipo -create "$DIST/CH9121Config-arm64" "$DIST/CH9121Config-x86_64" \
   -output "$APP/Contents/MacOS/CH9121Config"
-xcrun lipo -verify_arch arm64 x86_64 "$APP/Contents/MacOS/CH9121Config"
+# -verify_arch consumes the remaining arguments as architecture names: input goes first.
+xcrun lipo "$APP/Contents/MacOS/CH9121Config" -verify_arch arm64 x86_64
+xcrun lipo "$APP/Contents/MacOS/CH9121Config" -info
 chmod 755 "$APP/Contents/MacOS/CH9121Config"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
