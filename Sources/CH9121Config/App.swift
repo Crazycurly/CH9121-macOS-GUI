@@ -15,12 +15,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--smoke-test") {
             // CI launches the REAL bundled GUI without opening a network socket.
             let app=NSApplication.shared
-            app.setActivationPolicy(.prohibited)
+            app.setActivationPolicy(.accessory)
             let demo=AppModel(demo:true)
-            let host=NSHostingView(rootView:ContentView(model:demo))
+            let host=NSHostingView(rootView:ContentView(model:demo)
+                .background(Color(nsColor:.windowBackgroundColor))
+                .preferredColorScheme(.light))
             let window=NSWindow(contentRect:NSRect(x:0,y:0,width:1120,height:880),styleMask:[.titled,.closable,.resizable],backing:.buffered,defer:false)
+            window.appearance=NSAppearance(named:.aqua)
             window.contentView=host
+            window.center()
+            window.makeKeyAndOrderFront(nil)
+            app.activate(ignoringOtherApps:true)
+            // SwiftUI and native AppKit controls finish drawing on later run-loop turns.
+            // Capturing an unshown view immediately leaves tabs/buttons partially blank.
+            RunLoop.main.run(until:Date(timeIntervalSinceNow:1.0))
             host.layoutSubtreeIfNeeded()
+            window.displayIfNeeded()
             guard demo.canEdit, host.frame.width>0 else { exit(1) }
             if let i=CommandLine.arguments.firstIndex(of:"--screenshot") {
                 guard i+1<CommandLine.arguments.count,
